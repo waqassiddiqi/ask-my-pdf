@@ -156,7 +156,7 @@ class S3Storage(Storage):
 		prefix = kw.get('prefix') or os.getenv('S3_PREFIX','index/x1')
 		region = kw.get('region') or os.getenv('S3_REGION','sfo3')
 		bucket = kw.get('bucket') or os.getenv('S3_BUCKET','ask-my-pdf')
-		url    = kw.get('url')    or os.getenv('S3_URL',f'https://{region}.digitaloceanspaces.com')
+		url    = kw.get('url')    or os.getenv('S3_URL',f'https://s3-{region}.amazonaws.com')
 		key    = os.getenv('S3_KEY','')
 		secret = os.getenv('S3_SECRET','')
 		#

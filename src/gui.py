@@ -5,7 +5,7 @@ app_name = "Ask my PDF"
 # BOILERPLATE
 
 import streamlit as st
-st.set_page_config(layout='centered', page_title=f'{app_name} {__version__}')
+st.set_page_config(layout='centered', page_title=f'{app_name} {__version__}', initial_sidebar_state="collapsed")
 ss = st.session_state
 if 'debug' not in ss: ss['debug'] = {}
 import css
@@ -42,8 +42,8 @@ def on_api_key_change():
 	ss['debug']['storage.folder'] = ss['storage'].folder
 	ss['debug']['storage.class'] = ss['storage'].__class__.__name__
 
-
 ss['community_user'] = os.getenv('COMMUNITY_USER')
+
 if 'user' not in ss and ss['community_user']:
 	on_api_key_change() # use community key
 
@@ -80,21 +80,13 @@ def ui_info():
 
 def ui_api_key():
 	if ss['community_user']:
-		st.write('## 1. Optional - enter your OpenAI API key')
-		t1,t2 = st.tabs(['community version','enter your own API key'])
-		with t1:
-			pct = model.community_tokens_available_pct()
-			st.write(f'Community tokens available: :{"green" if pct else "red"}[{int(pct)}%]')
-			st.progress(pct/100)
-			st.write('Refresh in: ' + model.community_tokens_refresh_in())
-			st.write('You can sign up to OpenAI and/or create your API key [here](https://platform.openai.com/account/api-keys)')
-			ss['community_pct'] = pct
-			ss['debug']['community_pct'] = pct
-		with t2:
-			st.text_input('OpenAI API key', type='password', key='api_key', on_change=on_api_key_change, label_visibility="collapsed")
-	else:
-		st.write('## 1. Enter your OpenAI API key')
-		st.text_input('OpenAI API key', type='password', key='api_key', on_change=on_api_key_change, label_visibility="collapsed")
+		st.write('## API key token')
+		pct = model.community_tokens_available_pct()
+		st.write(f'Tokens available: :{"green" if pct else "red"}[{int(pct)}%]')
+		st.progress(pct/100)
+		st.write('Refresh in: ' + model.community_tokens_refresh_in())
+		ss['community_pct'] = pct
+		ss['debug']['community_pct'] = pct
 
 def index_pdf_file():
 	if ss['pdf_file']:
@@ -105,6 +97,7 @@ def index_pdf_file():
 				ss['index'] = index
 				debug_index()
 				ss['filename_done'] = ss['filename'] # UGLY
+				sample_questions()
 
 def debug_index():
 	index = ss['index']
@@ -120,7 +113,7 @@ def debug_index():
 	ss['debug']['index'] = d
 
 def ui_pdf_file():
-	st.write('## 2. Upload or select your PDF file')
+	st.write('## Upload document')
 	disabled = not ss.get('user') or (not ss.get('api_key') and not ss.get('community_pct',0))
 	t1,t2 = st.tabs(['UPLOAD','SELECT'])
 	with t1:
@@ -188,7 +181,7 @@ def ui_hyde_prompt():
 	st.text_area('HyDE prompt', prompts.HYDE, key='hyde_prompt')
 
 def ui_question():
-	st.write('## 3. Ask questions'+(f' to {ss["filename"]}' if ss.get('filename') else ''))
+	st.write('## Ask questions'+(f' to {ss["filename"]}' if ss.get('filename') else ''))
 	disabled = False
 	st.text_area('question', key='question', height=100, placeholder='Enter question here', help='', label_visibility="collapsed", disabled=disabled)
 
@@ -209,21 +202,21 @@ def ui_debug():
 
 def b_ask():
 	c1,c2,c3,c4,c5 = st.columns([2,1,1,2,2])
-	if c2.button('👍', use_container_width=True, disabled=not ss.get('output')):
-		ss['feedback'].send(+1, ss, details=ss['send_details'])
-		ss['feedback_score'] = ss['feedback'].get_score()
-	if c3.button('👎', use_container_width=True, disabled=not ss.get('output')):
-		ss['feedback'].send(-1, ss, details=ss['send_details'])
-		ss['feedback_score'] = ss['feedback'].get_score()
-	score = ss.get('feedback_score',0)
-	c5.write(f'feedback score: {score}')
-	c4.checkbox('send details', True, key='send_details',
-			help='allow question and the answer to be stored in the ask-my-pdf feedback database')
+	#if c2.button('👍', use_container_width=True, disabled=not ss.get('output')):
+	#	ss['feedback'].send(+1, ss, details=ss['send_details'])
+	#	ss['feedback_score'] = ss['feedback'].get_score()
+	#if c3.button('👎', use_container_width=True, disabled=not ss.get('output')):
+	#	ss['feedback'].send(-1, ss, details=ss['send_details'])
+	#	ss['feedback_score'] = ss['feedback'].get_score()
+	#score = ss.get('feedback_score',0)
+	#c5.write(f'feedback score: {score}')
+	#c4.checkbox('send details', True, key='send_details',
+	#		help='allow question and the answer to be stored in the ask-my-pdf feedback database')
 	#c1,c2,c3 = st.columns([1,3,1])
 	#c2.radio('zzz',['👍',r'...',r'👎'],horizontal=True,label_visibility="collapsed")
 	#
 	disabled = (not ss.get('api_key') and not ss.get('community_pct',0)) or not ss.get('index')
-	if c1.button('get answer', disabled=disabled, type='primary', use_container_width=True):
+	if c1.button('Send', disabled=disabled, type='primary', use_container_width=True):
 		question = ss.get('question','')
 		temperature = ss.get('temperature', 0.0)
 		hyde = ss.get('use_hyde')
@@ -259,6 +252,43 @@ def b_ask():
 		ss['answer'] = a
 		output_add(q,a)
 		st.experimental_rerun() # to enable the feedback buttons
+
+def sample_questions():
+	question = "Provide 3 sample questions without providing answers?"
+	temperature = ss.get('temperature', 0.0)
+	hyde = ss.get('use_hyde')
+	hyde_prompt = ss.get('hyde_prompt')
+	if ss.get('use_hyde_summary'):
+		summary = ss['index']['summary']
+		hyde_prompt += f" Context: {summary}\n\n"
+	task = ss.get('task')
+	max_frags = ss.get('max_frags',1)
+	n_before = ss.get('n_frag_before',0)
+	n_after  = ss.get('n_frag_after',0)
+	index = ss.get('index',{})
+	with st.spinner('pre processing document'):
+		resp = model.query(question, index,
+				task=task,
+				temperature=temperature,
+				hyde=hyde,
+				hyde_prompt=hyde_prompt,
+				max_frags=max_frags,
+				limit=max_frags+2,
+				n_before=n_before,
+				n_after=n_after,
+				model=ss['model'],
+			)
+	usage = resp.get('usage',{})
+	usage['cnt'] = 1
+	ss['debug']['model.query.resp'] = resp
+	ss['debug']['resp.usage'] = usage
+	ss['debug']['model.vector_query_time'] = resp['vector_query_time']
+
+	q = "Welcome, below are few sample questions which can be asked from this document:"
+	a = resp['text'].strip()
+	ss['answer'] = a
+	output_add(q,a)
+	#st.experimental_rerun() # to enable the feedback buttons
 
 def b_clear():
 	if st.button('clear output'):
@@ -302,6 +332,7 @@ def output_add(q,a):
 	ss['output'] = new + ss['output']
 
 # LAYOUT
+
 
 with st.sidebar:
 	ui_info()
